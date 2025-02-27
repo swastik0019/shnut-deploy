@@ -1,0 +1,12 @@
+# Ignore node_modules to prevent copying local dependencies
+node_modules
+
+# Ignore log files
+*.log
+
+# Ignore git files
+.git
+.gitignore
+
+# Optional: ignore local configuration files
+.env
