@@ -1,156 +1,182 @@
-import mongoose from "mongoose"; // Import mongoose to interact with MongoDB
-import Joi from "joi"; // Import Joi for validating data
+import mongoose from "mongoose";
+import Joi from "joi";
 
-// **Define the User schema for the MongoDB collection**
 const userSchema = new mongoose.Schema(
   {
     firstName: {
-      type: String, // Specifies that the 'firstName' field will be a string
-      required: [true, "First name is required"], // Ensures the 'firstName' field is required
-      trim: true, // Trims any leading/trailing whitespace from the name
+      type: String,
+      required: function () {
+        // Only required for local auth
+        return this.authType === "local";
+      },
+      trim: true,
     },
     lastName: {
-      type: String, // Specifies that the 'lastName' field will be a string
-      trim: true, // Trims any leading/trailing whitespace from the name
+      type: String,
+      trim: true,
     },
     nickname: {
       type: String,
       required: [true, "Nickname is required"],
-      unique: true, // Ensures the nickname is unique in the database
+      unique: true,
       trim: true,
     },
     email: {
-      type: String, // Specifies that the 'email' field will be a string
-      required: [true, "Email is required"], // Ensures the 'email' field is required
-      unique: true, // Ensures the email is unique in the database
-      lowercase: true, // Converts the email to lowercase before saving
+      type: String,
+      required: [true, "Email is required"],
+      unique: true,
+      lowercase: true,
       validate: {
         validator: function (email) {
-          // Simple regex for validating the email format
           return /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email);
         },
-        message: "Please provide a valid email address", // Error message if the email is invalid
+        message: "Please provide a valid email address",
       },
     },
     password: {
-      type: String, // Specifies that the 'password' field will be a string
-      required: [true, "Password is required"], // Ensures the 'password' field is required
-      minlength: [6, "Password must be at least 6 characters long"], // Minimum password length of 6 characters
+      type: String,
+      required: function () {
+        // Only required for local auth
+        return this.authType === "local";
+      },
+      minlength: [6, "Password must be at least 6 characters long"],
+    },
+    // Add authType field that was likely removed
+    authType: {
+      type: String,
+      enum: ["local"],
+      default: "local",
     },
     avatar: {
-      type: String, // Specifies that the 'avatar' field will be a string
-      default: "", // Default value for the avatar (if no avatar is provided)
+      type: String,
+      default: "",
+    },
+    gender: {
+      type: String,
+      enum: ["male", "female", "other"],
+      default: "other",
     },
     bio: {
-      type: String, // Specifies that the 'bio' field will be a string
-      trim: true, // Trims any leading/trailing whitespace from the bio
-      maxlength: [200, "Bio cannot exceed 200 characters"], // Limits the bio length to 200 characters
+      type: String,
+      trim: true,
+      maxlength: [200, "Bio cannot exceed 200 characters"],
     },
     isVerified: {
-      type: Boolean, // Specifies that the 'isVerified' field will be a boolean
-      default: false, // Default value for the 'isVerified' field (false by default)
+      type: Boolean,
+      default: false,
     },
     role: {
-      type: String, // Specifies that the 'role' field will be a string
-      enum: ["user", "creator", "admin"], // Valid roles: user, creator, admin
-      default: "user", // Default role is 'user'
+      type: String,
+      enum: ["user", "creator", "admin"],
+      default: "user",
+    },
+    phoneNumber: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows multiple null values
+      trim: true,
     },
     followers: [
       {
-        type: mongoose.Schema.Types.ObjectId, // Specifies that 'followers' will be an array of ObjectIds
-        ref: "User", // References the User model, allowing population of follower details
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
       },
     ],
     following: [
       {
-        type: mongoose.Schema.Types.ObjectId, // Specifies that 'following' will be an array of ObjectIds
-        ref: "User", // References the User model, allowing population of following details
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
       },
     ],
-    // **Add coins field to define the number of coins a user has**
     coins: {
       type: Number,
-      default: 0, // Every user starts with 0 coins by default
+      default: 0,
     },
     createdAt: {
-      type: Date, // Specifies that 'createdAt' will be a Date field
-      default: Date.now, // Default value is the current date and time
+      type: Date,
+      default: Date.now,
     },
-    // **Banning fields**
     banned: {
-      type: Boolean, // Specifies that the 'banned' field will be a boolean
-      default: false, // Default value is false (not banned)
+      type: Boolean,
+      default: false,
     },
     banningReason: {
-      type: String, // Specifies that the 'banningReason' field will be a string
-      default: "", // Default value is an empty string
+      type: String,
+      default: "",
     },
     banDate: {
-      type: Date, // Specifies that the 'banDate' field will be a Date field
-      default: null, // Default value is null (not banned)
+      type: Date,
+      default: null,
     },
-    // isOnline: {
-    //   type: Boolean,
-    //   default: false, // User is offline by default
-    // },
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
-    timestamps: true, // Automatically adds 'createdAt' and 'updatedAt' fields
+    timestamps: true,
   }
 );
 
-// **Define Joi validation schema for user data**
-const validateUser = (data) => {
-  const schema = Joi.object({
-    firstName: Joi.string().min(3).max(30).required().messages({
-      "string.empty": "First name is required", // Custom error message for empty first name
-      "string.min": "First name should have a minimum length of 3 characters", // Custom error message for first name too short
-      "string.max": "First name should have a maximum length of 30 characters", // Custom error message for first name too long
-    }),
-    lastName: Joi.string().min(3).max(30).optional().messages({
-      "string.min": "Last name should have a minimum length of 3 characters", // Custom error message for last name too short
-      "string.max": "Last name should have a maximum length of 30 characters", // Custom error message for last name too long
-    }),
+const validateUser = (user) => {
+  // Base schema with common fields
+  const baseSchema = {
     nickname: Joi.string().min(3).max(30).required().messages({
       "string.empty": "Nickname is required",
       "string.min": "Nickname should have a minimum length of 3 characters",
       "string.max": "Nickname should have a maximum length of 30 characters",
     }),
     email: Joi.string().email().required().messages({
-      "string.empty": "Email is required", // Custom error message for empty email
-      "string.email": "Please provide a valid email address", // Custom error message for invalid email
+      "string.empty": "Email is required",
+      "string.email": "Please provide a valid email address",
     }),
-    password: Joi.string().min(6).required().messages({
-      "string.empty": "Password is required", // Custom error message for empty password
-      "string.min": "Password must be at least 6 characters long", // Custom error message for password too short
+    avatar: Joi.string().uri().allow('').optional().messages({
+      "string.uri": "Avatar must be a valid URL",
     }),
-    confirmPassword: Joi.string()
-      .valid(Joi.ref("password"))
-      .required()
-      .messages({
-        "string.empty": "Confirm Password is required", // Custom error message for empty confirm password
-        "any.only": "Confirm Password must match Password", // Custom error message for mismatched passwords
-      }),
-    avatar: Joi.string().uri().optional().messages({
-      "string.uri": "Avatar must be a valid URL", // Custom error message for invalid avatar URL
+    gender: Joi.string().valid("male", "female", "other").required().messages({
+      "any.only": "Gender must be either male, female, or other",
     }),
-    bio: Joi.string().max(200).optional().messages({
-      "string.max": "Bio cannot exceed 200 characters", // Custom error message for bio too long
+    bio: Joi.string().max(200).allow('').optional().messages({
+      "string.max": "Bio cannot exceed 200 characters",
     }),
-    role: Joi.string().valid("user", "admin").optional().messages({
-      "any.only": "Role must be one of user or admin", // Custom error message for invalid role
+    role: Joi.string().valid("user", "creator", "admin").optional().messages({
+      "any.only": "Role must be one of user, creator, or admin",
     }),
     coins: Joi.number().min(0).optional().messages({
       "number.min": "Coins cannot be negative",
     }),
-    banned: Joi.boolean().optional(), // Optional field for banning status
-    banningReason: Joi.string().optional(), // Optional field for banning reason
-    banDate: Joi.date().optional(), // Optional field for ban date
-    // isOnline: Joi.boolean().optional(),
-  });
+    banned: Joi.boolean().optional(),
+    banningReason: Joi.string().allow('').optional(),
+    banDate: Joi.date().allow(null).optional(),
+    isOnline: Joi.boolean().optional(),
+    phoneNumber: Joi.string().allow('').optional(),
+    isVerified: Joi.boolean().optional(),
+    followers: Joi.array().items(Joi.string()).optional(),
+    following: Joi.array().items(Joi.string()).optional(),
+  };
 
-  // Validate the input data against the schema and return the result
-  return schema.validate(data, { abortEarly: false }); // abortEarly: false ensures that all validation errors are collected
+  // Local auth schema adds required fields for local authentication
+  const localAuthSchema = {
+    ...baseSchema,
+    firstName: Joi.string().required().messages({
+      "string.empty": "First name is required",
+    }),
+    lastName: Joi.string().allow('').optional(),
+    password: Joi.string().min(6).required().messages({
+      "string.empty": "Password is required",
+      "string.min": "Password must be at least 6 characters long",
+    }),
+    authType: Joi.string().valid("local").required(),
+  };
+
+  // Default to local auth validation if authType is not specified
+  const authType = user.authType || "local";
+  
+  // Create the validation schema based on auth type
+  const schema = Joi.object(localAuthSchema);
+  
+  // Return the validation result
+  return schema.validate(user, { abortEarly: false });
 };
 
 // Create the User model based on the schema

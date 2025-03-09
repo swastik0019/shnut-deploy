@@ -1,11 +1,16 @@
-import bcrypt from "bcrypt"; // Import bcrypt for password hashing
-import jwt from "jsonwebtoken"; // Import jsonwebtoken for token generation
-import { User, validateUser } from "../models/user.model.js"; // Import User model and validation function
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { User, validateUser } from "../models/user.model.js";
 import generateToken from "../utils/generateToken.js";
 
 // **Signup logic**
 const register = async (req, res) => {
   try {
+    // Set cache control headers
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
     // Validate the request body
     const { error } = validateUser(req.body);
     if (error) {
@@ -24,13 +29,14 @@ const register = async (req, res) => {
       avatar,
       bio,
       role,
+      gender,
     } = req.body;
 
     // Check if confirm password matches password
     if (password !== confirmPassword) {
       return res
         .status(400)
-        .json({ error: "Password and confirm password do not match" }); // Return error if passwords do not match
+        .json({ error: "Password and confirm password do not match" });
     }
 
     // Check if the user already exists (by email)
@@ -38,19 +44,26 @@ const register = async (req, res) => {
     if (existingUser) {
       return res
         .status(400)
-        .json({ error: "User already exists with this email" }); // Return error if user exists by email
+        .json({ error: "User already exists with this email" });
     }
 
-    // Optionally, check if a user with the same nickname already exists
+    // Check if a user with the same nickname already exists
     const existingNickname = await User.findOne({ nickname });
     if (existingNickname) {
       return res
         .status(400)
-        .json({ error: "User already exists with this nickname" }); // Return error if nickname is taken
+        .json({ error: "User already exists with this nickname" });
+    }
+
+    // Validate gender field
+    if (!gender || !["male", "female", "other"].includes(gender)) {
+      return res
+        .status(400)
+        .json({ error: "Gender must be either male, female, or other" });
     }
 
     // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10); // Hash the password with bcrypt
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create a new user instance, including nickname
     const user = new User({
@@ -62,24 +75,25 @@ const register = async (req, res) => {
       avatar,
       bio,
       role,
+      gender,
+      authType: "local", // Set auth type explicitly
     });
 
     // Save the user to the database
-    await user.save(); // Save the new user
+    await user.save();
 
     // Generate a JWT token
     let token = generateToken({ username: user.firstName, userId: user._id });
 
+    // Set consistent cookie settings
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true,
-      // secure: false,
-      sameSite: "none",
-      // sameSite: "strict",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 
-    // Respond with the user data and token (include nickname in the response)
+    // Respond with the user data and token
     res.status(201).json({
       message: "User registered successfully",
       user: {
@@ -90,149 +104,197 @@ const register = async (req, res) => {
         email: user.email,
         avatar: user.avatar,
         bio: user.bio,
+        gender: user.gender,
+        isOnline: true,
       },
-      token, // Return the generated token
+      token,
     });
   } catch (err) {
-    console.error(err); // Log any errors
-    res.status(500).json({ error: "Internal server error" }); // Return internal server error
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
 // **Login Logic**
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body; // Extract email and password from request body
+    // Set cache control headers to prevent caching
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    const { email, password } = req.body;
 
     // Check if the user exists
-    const user = await User.findOne({ email }); // Look for user by email
+    const user = await User.findOne({ email });
     if (!user) {
-      return res.status(400).json({ error: "Invalid email or password" }); // Return error if user not found
+      return res.status(400).json({ error: "Invalid email or password" });
     }
 
     // Compare the password
-    const isMatch = await bcrypt.compare(password, user.password); // Compare provided password with stored hashed password
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ error: "Invalid email or password" }); // Return error if passwords do not match
+      return res.status(400).json({ error: "Invalid email or password" });
     }
 
-    if (isMatch) {
-      let token = generateToken({ username: user.firstName, userId: user._id });
-      // console.log(token)
+    // Generate token
+    let token = generateToken({ username: user.firstName, userId: user._id });
 
-      res.cookie("token", token, {
-        httpOnly: true,
-        secure: true,
-        // secure: false,
-        sameSite: "none",
-        // sameSite: "strict",
-        maxAge: 3600000,
-      });
+    // Set the user online by updating the isOnline field
+    user.isOnline = true;
+    await user.save();
 
-      console.log("Login Successful");
-      res.status(200).json({
-        message: "Login Successful",
-        isAuthenticated: true,
-        token,
+    // Use consistent cookie settings that match register
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days to match register
+    });
+
+    // Send a definitive 200 response with data
+    res.status(200).json({
+      message: "Login Successful",
+      isAuthenticated: true,
+      token,
+      user: {
+        id: user._id,
         name: `${user.firstName} ${user.lastName}`,
         email: user.email,
         role: user.role,
         bio: user.bio,
-      });
-      console.log(req.cookies);
-    } else {
-      return res.status(500).json({
-        isAuthenticated: false,
-      });
-    }
+        gender: user.gender,
+        isOnline: true,
+      }
+    });
   } catch (err) {
-    console.error(err); // Log any errors
-    res.status(500).json({ error: "Internal server error" }); // Return internal server error
+    console.error("Login Error:", err);
+    res.status(500).json({ error: "Internal server error", details: err.message });
   }
 };
 
 // **Logout logic**
-const logout = (_, res) => {
-  // If storing the token in cookies
-  res.clearCookie("token"); // Clear the token cookie
+const logout = async (req, res) => {
+  try {
+    // Set cache control headers
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    // If the user is authenticated, update their online status
+    if (req.user && req.user.id) {
+      await User.findByIdAndUpdate(req.user.id, { isOnline: false });
+    }
 
-  res.status(200).json({ message: "Logout successful" }); // Return success message
-  console.log("Logout successful");
+    // Clear the token cookie with same settings as it was set
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", 
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    });
+
+    res.status(200).json({ message: "Logout successful", isOnline: false });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 };
 
 // **Token Refresh**
 const refreshToken = (req, res) => {
-  const { refreshToken } = req.body; // Extract refresh token from request body
+  // Set cache control headers
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  
+  const { refreshToken } = req.body;
 
   if (!refreshToken) {
-    return res.status(401).json({ error: "Refresh token is required" }); // Return error if refresh token is missing
+    return res.status(401).json({ error: "Refresh token is required" });
   }
 
   try {
-    const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET); // Verify the refresh token
+    const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
     // Generate a new access token
     const accessToken = jwt.sign(
-      { id: payload.id, role: payload.role }, // Payload for the new token
-      process.env.JWT_SECRET, // Secret key from environment variables
-      { expiresIn: "1h" } // Token expiration time
+      { id: payload.id, role: payload.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
     );
 
-    res.status(200).json({ accessToken }); // Return the new access token
+    res.status(200).json({ accessToken });
   } catch (err) {
-    console.error(err); // Log any errors
-    res.status(403).json({ error: "Invalid refresh token" }); // Return error if refresh token is invalid
+    console.error(err);
+    res.status(403).json({ error: "Invalid refresh token" });
   }
 };
 
 // **Forgot Password Logic**
 const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body; // Extract email from request body
+    // Set cache control headers
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    const { email } = req.body;
 
-    const user = await User.findOne({ email }); // Look for user by email
+    const user = await User.findOne({ email });
     if (!user) {
-      return res.status(404).json({ error: "User not found" }); // Return error if user not found
+      return res.status(404).json({ error: "User not found" });
     }
 
     // Generate reset token
     const resetToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "15m", // Token expiration time
+      expiresIn: "15m",
     });
 
     // TODO: Send reset token via email (e.g., using nodemailer)
-    console.log(`Password reset token: ${resetToken}`); // Log the reset token for debugging
+    console.log(`Password reset token: ${resetToken}`);
 
-    res.status(200).json({ message: "Password reset token sent to email" }); // Return success message
+    res.status(200).json({ message: "Password reset token sent to email" });
   } catch (err) {
-    console.error(err); // Log any errors
-    res.status(500).json({ error: "Internal server error" }); // Return internal server error
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
 // **Reset Password Logic**
 const resetPassword = async (req, res) => {
   try {
-    const { resetToken, newPassword } = req.body; // Extract reset token and new password from request body
+    // Set cache control headers
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    const { resetToken, newPassword } = req.body;
 
-    const decoded = jwt.verify(resetToken, process.env.JWT_SECRET); // Verify the reset token
+    const decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
 
-    const user = await User.findById(decoded.id); // Find user by ID from the decoded token
+    const user = await User.findById(decoded.id);
     if (!user) {
-      return res.status(404).json({ error: "User not found" }); // Return error if user not found
+      return res.status(404).json({ error: "User not found" });
     }
 
     // Hash the new password
-    user.password = await bcrypt.hash(newPassword, 10); // Hash the new password
+    user.password = await bcrypt.hash(newPassword, 10);
 
     // Save the updated user
-    await user.save(); // Save the updated user
+    await user.save();
 
-    res.status(200).json({ message: "Password reset successful" }); // Return success message
+    res.status(200).json({ message: "Password reset successful" });
   } catch (err) {
-    console.error(err); // Log any errors
-    res.status(500).json({ error: "Internal server error" }); // Return internal server error
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
-export { register, login, logout, refreshToken, forgotPassword, resetPassword };
+export {
+  register,
+  login,
+  logout,
+  refreshToken,
+  forgotPassword,
+  resetPassword,
+};

@@ -7,12 +7,11 @@ const postSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    title: { type: String, required: true, trim: true },
-    description: { type: String, required: true },
+    description: { type: String },
     image: { type: String }, // Image URL (Cloudinary or S3)
     video: { type: String }, // Video URL
-    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // Liked users
-    comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Comment" }], // Associated comments
+    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Comment" }],
     visibility: {
       type: String,
       enum: ["public", "private"],

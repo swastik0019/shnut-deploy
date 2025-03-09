@@ -6,7 +6,7 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (_, file) => {
     let folder = "shnut_posts/general"; // Default folder
-    let resourceType = "auto"; // Auto-detect
+    let resourceType = "auto";
 
     // Check file mimetype
     if (file.mimetype.startsWith("image/")) {

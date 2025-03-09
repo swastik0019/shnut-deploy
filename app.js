@@ -1,65 +1,126 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
-// import session from "express-session";
-// import passport from "./config/passport.js";
-
-// Import route handlers for different API endpoints
-import authRoutes from "./routes/auth.routes.js"; // Authentication routes (e.g., login, signup)
-import userRoutes from "./routes/users.routes.js"; // User-related routes (e.g., get/update profile)
-import postRoutes from "./routes/post.routes.js"; // Content-related routes (e.g., upload, fetch, delete)
-import messageRoutes from "./routes/message.routes.js" //Message-related routes (eg., send/receive messages)
-import onBoardingRoutes from "./routes/onboarding.routes.js" //Onboarding related routes (eg., upload avatar)
-import followRoutes from "./routes/follow.routes.js" 
-// import paymentRoutes from "./routes/payment.routes.js"
-import videoChatSessionRoutes from "./routes/video.routes.js" 
-import activityRoute from "./routes/activity.routes.js" 
+import helmet from "helmet";
+import compression from "compression";
+import rateLimit from "express-rate-limit";
+import morgan from "morgan";
 import path from "path";
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 
+// Import route modules
+import authRoutes from "./routes/auth.routes.js";
+import userRoutes from "./routes/users.routes.js";
+import postRoutes from "./routes/post.routes.js";
+import messageRoutes from "./routes/message.routes.js";
+import followRoutes from "./routes/follow.routes.js";
+import videoChatSessionRoutes from "./routes/video.routes.js";
+import activityRoute from "./routes/activity.routes.js";
+import likesRoute from "./routes/likes.routes.js";
+import commentsRoute from "./routes/comment.routes.js";
 
+// Import custom middleware
+import { errorHandler } from "./middlewares/errorHandler.middleware.js";
+import { notFoundHandler } from "./middlewares/errorHandler.middleware.js";
 
+// Load environment variables
+import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
 
-// **Configure CORS middleware to allow requests from specific origins**
+// Defining constants
+const NODE_ENV = process.env.NODE_ENV || "development";
+const isProd = NODE_ENV === "production";
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://project-shnut-three.vercel.app";
+
+// Request logging
+app.use(morgan(isProd ? "combined" : "dev"));
+
+// Security middlewares
 app.use(
-  cors({
-    // origin: process.env.CORS_ORIGIN,
-    origin:  process.env.CORS_ORIGIN || "https://project-shnut-three.vercel.app",
-    credentials: true, // Allow credentials like cookies or authorization headers
+  helmet({
+    contentSecurityPolicy: isProd ? undefined : false,
   })
 );
 
-// **Middleware to parse incoming data**
-app.use(express.json()); // Parse incoming JSON data
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded data (e.g., form submissions)
-app.use(cookieParser()); // Parse cookies in incoming requests
-// app.use(
-//   session({
-//     secret: process.env.SESSION_SECRET,
-//     resave: false,
-//     saveUninitialized: false,
-//   })
-// );
+// Disable caching for auth routes middleware
+const noCacheMiddleware = (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+};
 
-// app.use(passport.initialize());
-// app.use(passport.session());
+// Rate limiting to prevent abuse
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many requests from this IP, please try again after 15 minutes"
+});
 
-// **Define API routes**
-app.use("/api/auth", authRoutes); // Public routes for authentication (e.g., login, signup, logout)
-app.use("/api/users", userRoutes); // Routes for user profile management
-app.use("/api/posts", postRoutes); // Routes for content upload, retrieval, and deletion
-app.use("/api/messages", messageRoutes); //Routes for sending/receiving messages
-app.use("/api/onboarding", onBoardingRoutes); //Routes for sending/receiving messages
-app.use("/api/follow", followRoutes); //Routes for followers/following
-// app.use("/api/payment", paymentRoutes); //Routes for payment(to be added in future)
-app.use("/api/video", videoChatSessionRoutes); //Routes for payment
-app.use("/api/activity", activityRoute); //Routes for payment
+// Apply rate limiting to authentication routes
+app.use("/api/auth", apiLimiter);
+
+// CORS configuration
+// const corsOptions = {
+//   origin: function (origin, callback) {
+//     const allowedOrigins = [
+//       CORS_ORIGIN,
+//       'http://localhost:5173',
+//       'https://project-shnut-three.vercel.app'
+//     ];
+    
+//     // Allow requests with no origin (like mobile apps, curl requests, etc)
+//     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+//       callback(null, true);
+//     } else {
+//       console.warn(`CORS blocked request from: ${origin}`);
+//       callback(new Error('Not allowed by CORS'));
+//     }
+//   },
+//   credentials: true,
+//   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+//   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+//   maxAge: 86400 // 24 hours
+// };
+
+// app.use(cors(corsOptions));
+
+// Options preflight for all routes
+// app.options('*', cors(corsOptions));
+
+// Request parsing middlewares
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cookieParser());
+
+// Response compression
+app.use(compression());
+
+// Health check endpoint
+app.get("/health", (_, res) => {
+  res.status(200).json({ status: "ok", environment: NODE_ENV });
+});
+
+// Apply no-cache middleware to auth routes
+app.use("/api/auth", noCacheMiddleware);
+
+// API routes
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/posts", postRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/follow", followRoutes);
+app.use("/api/video", videoChatSessionRoutes);
+app.use("/api/activity", activityRoute);
+app.use("/api", likesRoute);
+app.use("/api/comments", commentsRoute);
+
 
 
 
@@ -67,10 +128,9 @@ app.use("/api/activity", activityRoute); //Routes for payment
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-
-const NODE_ENV = "production";
 // Serve frontend
 if (NODE_ENV === "production") {
+console.log(__filename)
   app.use(express.static(path.join(__dirname, "./dist")));
 
   app.get("*", (req, res) =>
@@ -82,11 +142,10 @@ if (NODE_ENV === "production") {
   app.get("/", (req, res) => res.send("Please set to production"));
 }
 
+// Handle 404 errors
+app.use(notFoundHandler);
 
-// **Fallback route to handle requests to undefined endpoints**
-app.use((_, res) => {
-  res.status(404).json({ error: "Endpoint not found" }); // Respond with a 404 error message
-});
+// Global error handler
+app.use(errorHandler);
 
-// Export the Express app for use in other files (e.g., server.js)
 export default app;

@@ -69,7 +69,7 @@ const getFollowers = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.status(200).json(user.followers);
+    res.status(200).json({ followers: user.followers });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -85,7 +85,7 @@ const getFollowing = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.status(200).json(user.following);
+    res.status(200).json({ following: user.following });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

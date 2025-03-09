@@ -1,9 +1,11 @@
 import express from "express";
 import { verifyToken, checkRole } from "../middlewares/auth.middleware.js";
+import upload from "../middlewares/multer.middleware.js";
 import {
   getUserProfile,
   updateUserProfile,
   deleteUserProfile,
+  banUser
 } from "../controllers/user.controller.js";
 import { User } from "../models/user.model.js";
 
@@ -22,9 +24,10 @@ router.get(
 // Endpoint: /api/users/profile
 router.put(
   "/profile",
-  verifyToken, // Verify that the user is authenticated
+  verifyToken,
   checkRole(["user", "creator", "admin"]),
-  updateUserProfile // Update the user profile if the role check passes
+  upload.single('avatar'), // Add this line to handle avatar upload
+  updateUserProfile
 );
 
 // **DELETE User Profile Based on Role**
@@ -36,6 +39,17 @@ router.delete(
   deleteUserProfile // Delete the user profile if the role check passes
 );
 
+// **Ban User (Admin Only)**
+// Endpoint: /api/users/ban
+router.post(
+  "/ban",
+  verifyToken,
+  checkRole(["admin"]), // Only admins can ban users
+  banUser
+);
+
+// **Search User by Nickname**
+// Endpoint: /api/users/search
 router.get("/search", async (req, res) => {
   const { q } = req.query;
   if (!q) {
@@ -56,6 +70,7 @@ router.get("/search", async (req, res) => {
       nickname: user.nickname,
       email: user.email,
       avatar: user.avatar,
+      gender: user.gender
     };
 
     res.status(200).json({ success: true, user: result });

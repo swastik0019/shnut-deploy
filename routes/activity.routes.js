@@ -4,39 +4,52 @@ import {
   getOnlineStatus,
   markUserOnline,
   markUserOffline,
+  getOnlineUsers,
+  getOnlineCreators
 } from "../controllers/activity.controller.js";
 import { verifyToken, checkRole } from "../middlewares/auth.middleware.js";
+
 const router = express.Router();
 
 // Update online status by user ID
 router.put(
   "/users/:userId/online-status",
-  verifyToken, // Verify that the user is authenticated
-  checkRole(["user", "creator", "admin"]), // Check if the user has a valid role
+  verifyToken,
+  checkRole(["user", "creator", "admin"]),
   updateOnlineStatus
 );
 
 // Get online status by user ID
 router.get(
   "/users/:userId/online-status",
-  verifyToken, // Verify that the user is authenticated
-  checkRole(["user", "creator", "admin"]), // Check if the user has a valid role
-  getOnlineStatus
+  getOnlineStatus  // Removed auth requirements to allow public checking
 );
 
-// endpoints for authenticated users
+// Endpoints for authenticated users
 router.put(
   "/users/me/online",
-  verifyToken, // Verify that the user is authenticated
-  checkRole(["user", "creator", "admin"]), // Check if the user has a valid role
+  verifyToken,
+  checkRole(["user", "creator", "admin"]),
   markUserOnline
 );
 
 router.put(
   "/users/me/offline",
-  verifyToken, // Verify that the user is authenticated
-  checkRole(["user", "creator", "admin"]), // Check if the user has a valid role
+  verifyToken,
+  checkRole(["user", "creator", "admin"]),
   markUserOffline
+);
+
+// Get all online users
+router.get(
+  "/users/online",
+  getOnlineUsers
+);
+
+// Get all online creators
+router.get(
+  "/creators/online",
+  getOnlineCreators
 );
 
 export default router;

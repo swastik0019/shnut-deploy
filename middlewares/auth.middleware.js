@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 // **Middleware to verify JWT token**
 // This middleware checks if the request has a valid JWT token.
 const verifyToken = async (req, res, next) => {
+
   const token = req.cookies.token || req.headers.authorization?.split(" ")[1];
 
   console.log("Token from cookies:", token); // Check the token value
