@@ -38,8 +38,8 @@ router.get(
 // Add the new route to check like status - note we need auth for this
 router.get(
     "/posts/likes/status/:postId",
-    // verifyToken,
-    // checkRole(["user", "creator", "admin"]),
+    verifyToken,
+    checkRole(["user", "creator", "admin"]),
     getLikeStatus
 );
 

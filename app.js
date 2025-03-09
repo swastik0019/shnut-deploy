@@ -6,9 +6,13 @@ import compression from "compression";
 import rateLimit from "express-rate-limit";
 import morgan from "morgan";
 import path from "path";
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { fileURLToPath } from "url";
+import fs from "fs";
 
+
+// Get current directory name (ES module equivalent of __dirname)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Import route modules
 import authRoutes from "./routes/auth.routes.js";
@@ -39,10 +43,12 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://project-shnut-three.verc
 // Request logging
 app.use(morgan(isProd ? "combined" : "dev"));
 
-// Security middlewares
+// Security middlewares - Modified to allow CSS and JS
 app.use(
   helmet({
-    contentSecurityPolicy: isProd ? undefined : false,
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
   })
 );
 
@@ -121,29 +127,98 @@ app.use("/api/activity", activityRoute);
 app.use("/api", likesRoute);
 app.use("/api/comments", commentsRoute);
 
+// Serve static files from the React build directory with explicit MIME types
+if (isProd) {
+  // Assume the React app is built and located in the 'frontend/dist' directory
+  // Change this path if your build output is in a different location
+  const buildPath = path.resolve(__dirname, './dist');
+  
+  // Custom middleware to set the correct MIME types
+  app.use((req, res, next) => {
+    // Skip for API routes
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+    
+    const filePath = path.join(buildPath, req.path);
+    
+    // Skip for files that don't exist or directories
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+      return next();
+    }
+    
+    // Set appropriate MIME types based on file extension
+    if (req.path.endsWith('.css')) {
+      res.set('Content-Type', 'text/css');
+    } else if (req.path.endsWith('.js')) {
+      // For JavaScript module scripts
+      res.set('Content-Type', 'application/javascript');
+    } else if (req.path.endsWith('.mjs')) {
+      // Explicit ES modules
+      res.set('Content-Type', 'application/javascript');
+    } else if (req.path.endsWith('.svg')) {
+      res.set('Content-Type', 'image/svg+xml');
+    } else if (req.path.endsWith('.json')) {
+      res.set('Content-Type', 'application/json');
+    }
+    
+    // Continue to static file serving
+    next();
+  });
+  
+  // Serve static files
+  app.use(express.static(buildPath));
+  
+  // Direct access to assets (for debugging purposes)
+  app.get('/assets/*', (req, res, next) => {
+    const filePath = path.join(buildPath, req.path);
+    if (fs.existsSync(filePath)) {
+      if (req.path.endsWith('.css')) {
+        res.set('Content-Type', 'text/css');
+      } else if (req.path.endsWith('.js')) {
+        res.set('Content-Type', 'application/javascript');
+      }
+      res.sendFile(filePath);
+    } else {
+      next();
+    }
+  });
 
+  // Handle direct requests to specific files with proper MIME types
+  app.get('*.js', (req, res, next) => {
+    const filePath = path.join(buildPath, req.path);
+    if (fs.existsSync(filePath)) {
+      res.set('Content-Type', 'application/javascript');
+      res.sendFile(filePath);
+    } else {
+      next();
+    }
+  });
+  
+  app.get('*.css', (req, res, next) => {
+    const filePath = path.join(buildPath, req.path);
+    if (fs.existsSync(filePath)) {
+      res.set('Content-Type', 'text/css');
+      res.sendFile(filePath);
+    } else {
+      next();
+    }
+  });
 
-
-// Get the current directory path
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Serve frontend
-// if (NODE_ENV === "production") {
-// console.log(__filename)
-//   app.use(express.static(path.join(__dirname, "./dist")));
-
-//   app.get("*", (req, res) =>
-//       res.sendFile(
-//           path.resolve(__dirname, "./", "dist", "index.html")
-//       )
-//   );
-// } else {
-//   app.get("/", (req, res) => res.send("Please set to production"));
-// }
-
-// Handle 404 errors
-app.use(notFoundHandler);
+  // All other GET requests not handled before will return the React app
+  app.get('*', (req, res) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/')) {
+      return notFoundHandler(req, res);
+    }
+    
+    res.sendFile(path.resolve(buildPath, 'index.html'));
+  });
+} else {
+  // In development, let the React dev server handle the frontend
+  // and let the notFoundHandler handle 404s for the API
+  app.use(notFoundHandler);
+}
 
 // Global error handler
 app.use(errorHandler);
