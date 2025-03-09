@@ -128,8 +128,8 @@ const getLikesCount = async (req, res) => {
 
 const getLikeStatus = async (req, res) => {
   try {
-    const { postId } = req.params;
-    const userId = req.user._id;
+    const { postId } = req?.params;
+    const userId = req?.user?._id;
 
     if (!mongoose.Types.ObjectId.isValid(postId)) {
       return res.status(400).json({ message: "Invalid post id" });

@@ -129,18 +129,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Serve frontend
-if (NODE_ENV === "production") {
-console.log(__filename)
-  app.use(express.static(path.join(__dirname, "./dist")));
+// if (NODE_ENV === "production") {
+// console.log(__filename)
+//   app.use(express.static(path.join(__dirname, "./dist")));
 
-  app.get("*", (req, res) =>
-      res.sendFile(
-          path.resolve(__dirname, "./", "dist", "index.html")
-      )
-  );
-} else {
-  app.get("/", (req, res) => res.send("Please set to production"));
-}
+//   app.get("*", (req, res) =>
+//       res.sendFile(
+//           path.resolve(__dirname, "./", "dist", "index.html")
+//       )
+//   );
+// } else {
+//   app.get("/", (req, res) => res.send("Please set to production"));
+// }
 
 // Handle 404 errors
 app.use(notFoundHandler);
