@@ -1,8 +1,93 @@
+import { emitToUser } from './socketEmitter.js';
+
 const webrtcHandler = (io, socket) => {
   console.log("Setting up WebRTC events for socket:", socket.id);
   
+  // Get the user ID from the socket query
+  const userId = socket.handshake.query.userId;
+  console.log(`WebRTC handler initialized for user: ${userId}`);
+  
   // Keep track of which rooms this socket has joined
   const joinedRooms = new Set();
+  
+  // Handle call invitations - THIS IS THE MISSING HANDLER
+  socket.on("callInvitation", (data) => {
+    const { to, from, fromName, fromAvatar, roomId } = data;
+    console.log(`Call invitation from ${fromName || from} (${from}) to ${to} for room ${roomId}`);
+    
+    // Forward the invitation to the recipient
+    // Using emitToUser from socketEmitter to ensure reliable delivery
+    emitToUser(to, "callInvitation", {
+      from,
+      fromName,
+      fromAvatar,
+      roomId
+    });
+    
+    // Alternative direct method using socket.io
+    io.to(to).emit("callInvitation", {
+      from,
+      fromName,
+      fromAvatar,
+      roomId
+    });
+    
+    console.log(`Call invitation forwarded to recipient: ${to}`);
+  });
+  
+  // Handle call accepted - THIS IS ANOTHER MISSING HANDLER
+  socket.on("callAccepted", (data) => {
+    const { to, roomId } = data;
+    console.log(`Call accepted by ${userId || socket.id} for ${to} in room ${roomId}`);
+    
+    // Notify the caller that their call was accepted
+    emitToUser(to, "callAccepted", {
+      from: userId || socket.id,
+      roomId
+    });
+    
+    // Alternative direct method
+    io.to(to).emit("callAccepted", {
+      from: userId || socket.id,
+      roomId
+    });
+  });
+  
+  // Handle call declined - THIS IS ANOTHER MISSING HANDLER
+  socket.on("callDeclined", (data) => {
+    const { to, roomId } = data;
+    console.log(`Call declined by ${userId || socket.id} for ${to} in room ${roomId}`);
+    
+    // Notify the caller that their call was declined
+    emitToUser(to, "callDeclined", {
+      from: userId || socket.id,
+      roomId
+    });
+    
+    // Alternative direct method
+    io.to(to).emit("callDeclined", {
+      from: userId || socket.id,
+      roomId
+    });
+  });
+  
+  // Handle call canceled - THIS IS ANOTHER MISSING HANDLER
+  socket.on("callCanceled", (data) => {
+    const { to, roomId } = data;
+    console.log(`Call canceled by ${userId || socket.id} for ${to} in room ${roomId}`);
+    
+    // Notify the recipient that the call was canceled
+    emitToUser(to, "callCanceled", {
+      from: userId || socket.id,
+      roomId
+    });
+    
+    // Alternative direct method
+    io.to(to).emit("callCanceled", {
+      from: userId || socket.id,
+      roomId
+    });
+  });
   
   // Join a call room
   socket.on("joinCall", (room) => {

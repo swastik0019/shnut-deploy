@@ -9,7 +9,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 
-
 // Get current directory name (ES module equivalent of __dirname)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +23,7 @@ import videoChatSessionRoutes from "./routes/video.routes.js";
 import activityRoute from "./routes/activity.routes.js";
 import likesRoute from "./routes/likes.routes.js";
 import commentsRoute from "./routes/comment.routes.js";
+import notificationsRoute from "./routes/notification.routes.js";
 
 // Import custom middleware
 import { errorHandler } from "./middlewares/errorHandler.middleware.js";
@@ -126,6 +126,7 @@ app.use("/api/video", videoChatSessionRoutes);
 app.use("/api/activity", activityRoute);
 app.use("/api", likesRoute);
 app.use("/api/comments", commentsRoute);
+app.use("/api/notifications", notificationsRoute);
 
 // Serve static files from the React build directory with explicit MIME types
 if (isProd) {

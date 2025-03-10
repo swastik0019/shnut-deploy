@@ -80,7 +80,8 @@ const getOnlineStatus = async (req, res) => {
 const markUserOnline = async (req, res) => {
   try {
     const userId = req.user._id;
-    
+    console.log("Marking user online:", userId);
+
     // Use a transaction to ensure consistency
     const session = await mongoose.startSession();
     let user;
@@ -122,7 +123,7 @@ const markUserOnline = async (req, res) => {
 const markUserOffline = async (req, res) => {
   try {
     const userId = req.user._id;
-    
+
     // Use a transaction to ensure consistency
     const session = await mongoose.startSession();
     let user;
@@ -162,9 +163,10 @@ const markUserOffline = async (req, res) => {
 // Get a list of all online users
 const getOnlineUsers = async (req, res) => {
   try {
-    const onlineUsers = await User.find({ isOnline: true })
-      .select('_id firstName lastName nickname avatar role');
-    
+    const onlineUsers = await User.find({ isOnline: true }).select(
+      "_id firstName lastName nickname avatar role"
+    );
+
     return res.status(200).json({ onlineUsers });
   } catch (error) {
     console.error("Error fetching online users:", error);
@@ -178,9 +180,9 @@ const getOnlineCreators = async (req, res) => {
     const onlineCreators = await User.find({
       isOnline: true,
       role: "creator",
-      banned: false
-    }).select('_id firstName lastName nickname avatar bio');
-    
+      banned: false,
+    }).select("_id firstName lastName nickname avatar bio");
+
     return res.status(200).json({ onlineCreators });
   } catch (error) {
     console.error("Error fetching online creators:", error);
@@ -188,11 +190,11 @@ const getOnlineCreators = async (req, res) => {
   }
 };
 
-export { 
-  updateOnlineStatus, 
-  getOnlineStatus, 
-  markUserOnline, 
+export {
+  updateOnlineStatus,
+  getOnlineStatus,
+  markUserOnline,
   markUserOffline,
   getOnlineUsers,
-  getOnlineCreators
+  getOnlineCreators,
 };

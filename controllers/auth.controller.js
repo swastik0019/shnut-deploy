@@ -75,8 +75,7 @@ const register = async (req, res) => {
       avatar,
       bio,
       role,
-      gender,
-      authType: "local", // Set auth type explicitly
+      gender
     });
 
     // Save the user to the database
