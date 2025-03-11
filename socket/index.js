@@ -1,6 +1,6 @@
 import { User } from "../models/user.model.js";
 import chatHandler from "./chatHandler.js";
-import webrtcHandler from "./videoChatHandler.js"; // Make sure to use the correct import
+import webrtcHandler from "./videoChatHandler.js";
 import notificationHandler from "./notificationHandler.js";
 import mongoose from "mongoose";
 import { initSocketEmitter } from "./socketEmitter.js";
